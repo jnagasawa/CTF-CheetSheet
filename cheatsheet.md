@@ -620,13 +620,39 @@ Also you can use windows/meterpreter/reverse_tcp and get shell with multi/handle
   meterpreter > upload <file>
   ```
 
-### shell
+### PowerShell
 
-- ls command
+`Verb-Noun`, Ex. `Get-Help Command-Name -examples`, `Get-Command New-*`
 
-  ```powershell
-  > dir
-  ```
+View members for Get-Command: `Get-Command | Get-Member -MemberType Method`
+
+Create objects: `Get-ChildItem | Select-Object -Property Mode, Name`
+
+Filter object: `Get-Service | Where-Object -Property Status -operator Stopped`
+
+Sort objects: `Get-ChildItem | Sort-Object`
+
+Find file: `Get-ChildItem -Path C:\ -Include *interesting-file.txt* -File -Recurse -ErrorAction SilentlyContinue`
+
+Show contents of file: `Get-Content *interesting-file.txt*`
+
+Show Users: `Get-LocalUser`
+
+Show Users witch doesn't require password: ` Get-LocalUser | Where-Object -Property PasswordRequired -Match False`
+
+Show IP: `Get-NetIPAddress`
+
+Show open ports: `GEt-NetTCPConnection | Where-Object -Property State -Match Listen | measure`
+
+Show patches applied: `Get-HotFix` 
+
+Search files which contain API_KEY: `Get-ChildItem C:\Users -Recurse | Select-String -pattern API_KEY` this also can be used to find password `-pattern password`
+
+Show running process: `Get-Process`
+
+Show specified scheduled task: `Get-ScheduledTask -TaskName <task name>`
+
+Show owner of file: `Get-Acl C:/`
 
 
 
@@ -688,7 +714,7 @@ Then, use [python script ](https://raw.githubusercontent.com/unode/firefox_decry
 python3 firefox_decrypt.py <file path> 
 ```
 
-use rpc or psexec in impacket to login
+use psexec in impacket, or rpc to login
 
 ## Attack Kerberos
 
