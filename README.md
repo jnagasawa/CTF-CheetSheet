@@ -1,4 +1,4 @@
-# CTF-CheetSheet
+# CTF-CheatSheet
 This is a cheat sheet for CTF and Pentesting.
 
 If you have any ideas, you are more than welcome to add!!
